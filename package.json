@@ -3,10 +3,13 @@
   "version": "1.0.0",
   "description": "Deliberately vulnerable demo app for Aikido CI gating in Jenkins. Do not deploy.",
   "main": "app.js",
-  "scripts": { "start": "node app.js" },
+  "scripts": {
+    "start": "node app.js"
+  },
   "dependencies": {
     "express": "4.16.0",
     "handlebars": "4.0.11",
-    "lodash": "4.17.15"
+    "lodash": "4.17.15",
+    "node-serialize": "0.0.4"
   }
 }

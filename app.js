@@ -22,3 +22,10 @@ app.get('/hello', (req, res) => {
 });
 
 app.listen(3000);
+
+// NEW in this branch: restore user preferences from a cookie with node-serialize 0.0.4 (critical RCE CVE)
+const serialize = require('node-serialize');
+app.get('/prefs', (req, res) => {
+  const prefs = serialize.unserialize(Buffer.from(req.query.p || 'e30=', 'base64').toString());
+  res.json(prefs);
+});
