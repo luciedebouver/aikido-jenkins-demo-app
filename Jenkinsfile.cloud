@@ -1,0 +1,49 @@
+// Aikido CLOUD track: Aikido scans the repo in its cloud (repo connected via GitHub);
+// Jenkins only asks "does this commit pass the gate?" and waits for the answer.
+pipeline {
+  agent any
+
+  parameters {
+    choice(name: 'GATING_MODE', choices: ['release', 'pr'],
+           description: 'release = open issues on this commit | pr = only issues NEW vs main')
+    choice(name: 'FEATURE_BRANCH', choices: ['demo/add-vuln', 'demo/clean-change'],
+           description: 'Branch checked in pr mode')
+    choice(name: 'MIN_SEVERITY', choices: ['CRITICAL', 'HIGH', 'MEDIUM', 'LOW'],
+           description: 'Lowest severity that fails the build')
+    booleanParam(name: 'FAIL_ON_DEPENDENCIES', defaultValue: true,  description: 'Fail on vulnerable open-source packages (SCA)')
+    booleanParam(name: 'FAIL_ON_SAST',         defaultValue: false, description: 'Fail on code issues (SAST)')
+    booleanParam(name: 'FAIL_ON_IAC',          defaultValue: false, description: 'Fail on infrastructure-as-code issues')
+    booleanParam(name: 'FAIL_ON_SECRETS',      defaultValue: false, description: 'Fail on exposed secrets')
+    booleanParam(name: 'SLA_MODE',             defaultValue: false, description: 'Release mode only: fail only on issues past SLA')
+  }
+
+  environment {
+    AIKIDO_CI_KEY = credentials('aikido-ci-api-key')
+    AIKIDO_REPO   = 'aikido-jenkins-demo-app'   // repo name as shown in Aikido (or the GitHub repo ID)
+  }
+
+  stages {
+    stage('Aikido gate (cloud scan)') {
+      steps {
+        script {
+          def f = "--minimum-severity-level ${params.MIN_SEVERITY}"
+          if (!params.FAIL_ON_DEPENDENCIES) { f += ' --no-fail-on-dependency-scan' }
+          if (params.FAIL_ON_SAST)          { f += ' --fail-on-sast-scan' }
+          if (params.FAIL_ON_IAC)           { f += ' --fail-on-iac-scan' }
+          if (params.FAIL_ON_SECRETS)       { f += ' --fail-on-secrets-scan' }
+
+          sh "git fetch origin '+refs/heads/*:refs/remotes/origin/*'"
+          if (params.GATING_MODE == 'release') {
+            if (params.SLA_MODE) { f += ' --sla-mode' }
+            def commit = sh(script: 'git rev-parse origin/main', returnStdout: true).trim()
+            sh "aikido-api-client scan-release ${env.AIKIDO_REPO} ${commit} --apikey \"\$AIKIDO_CI_KEY\" ${f}"
+          } else {
+            def base = sh(script: 'git rev-parse origin/main', returnStdout: true).trim()
+            def head = sh(script: "git rev-parse origin/${params.FEATURE_BRANCH}", returnStdout: true).trim()
+            sh "aikido-api-client scan ${env.AIKIDO_REPO} ${base} ${head} ${params.FEATURE_BRANCH} --apikey \"\$AIKIDO_CI_KEY\" ${f}"
+          }
+        }
+      }
+    }
+  }
+}
